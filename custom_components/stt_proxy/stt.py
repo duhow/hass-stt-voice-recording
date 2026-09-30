@@ -6,8 +6,10 @@ import asyncio
 from collections.abc import AsyncIterable
 import logging
 from pathlib import Path
+import subprocess
 
 from homeassistant.components import stt
+from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.components.stt import (
     AudioBitRates,
     AudioChannels,
@@ -25,7 +27,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import CONF_RECORDING_DIRECTORY, CONF_UPSTREAM_ENGINE, DEFAULT_RECORDING_DIRECTORY
-from .storage import write_recording, write_transcription
+from .storage import convert_recording_to_flac, write_recording, write_transcription
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,6 +140,19 @@ class STTProxyEntity(SpeechToTextEntity):
             _LOGGER.error("Unable to save incoming STT audio: %s", err)
             raise HomeAssistantError("Unable to save STT recording") from err
 
+        ffmpeg_binary = "ffmpeg"
+        try:
+            ffmpeg_binary = get_ffmpeg_manager(self.hass).binary
+            await asyncio.to_thread(
+                convert_recording_to_flac, recording_path, ffmpeg_binary
+            )
+        except Exception as err:
+            _LOGGER.warning(
+                "Unable to convert recording %s to FLAC; original retained: %s",
+                recording_path,
+                err,
+            )
+
         engine = self._upstream()
         replay_stream = _replay_chunks(chunks)
         try:
@@ -152,9 +167,9 @@ class STTProxyEntity(SpeechToTextEntity):
 
         try:
             await asyncio.to_thread(
-                write_transcription, recording_path, result.text
+                write_transcription, recording_path, result.text, ffmpeg_binary
             )
-        except (OSError, ValueError, TypeError) as err:
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError) as err:
             _LOGGER.error(
                 "Unable to save transcription metadata for recording %s: %s",
                 recording_path,

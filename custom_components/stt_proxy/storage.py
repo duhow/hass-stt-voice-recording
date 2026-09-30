@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import subprocess
 from typing import Any
 from uuid import uuid4
 from datetime import UTC, datetime
@@ -43,7 +44,30 @@ def write_recording(
     return recording_path
 
 
-def write_transcription(recording_path: Path, transcription: str) -> None:
+def convert_recording_to_flac(recording_path: Path, ffmpeg_binary: str) -> Path:
+    """Create a private FLAC sibling with every sidecar field as a Vorbis comment."""
+    metadata_path = recording_path.with_suffix(".json")
+    with metadata_path.open(encoding="utf-8") as metadata_file:
+        metadata_dict = json.load(metadata_file)
+
+    flac_path = recording_path.with_suffix(".flac")
+    temporary_path = recording_path.with_name(f".{recording_path.stem}.tmp.flac")
+    command = [ffmpeg_binary, "-nostdin", "-v", "error", "-y", "-i", str(recording_path), "-map", "0:a:0", "-c:a", "flac"]
+    for key, value in metadata_dict.items():
+        command.extend(("-metadata", f"{key}={value}"))
+    command.extend(("-f", "flac", str(temporary_path)))
+    try:
+        subprocess.run(command, check=True, capture_output=True)
+        os.chmod(temporary_path, 0o600)
+        temporary_path.replace(flac_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+    return flac_path
+
+
+def write_transcription(
+    recording_path: Path, transcription: str, ffmpeg_binary: str = "ffmpeg"
+) -> None:
     """Append the successful transcription to a recording's JSON metadata."""
     metadata_path = recording_path.with_suffix(".json")
     with metadata_path.open(encoding="utf-8") as metadata_file:
@@ -58,3 +82,24 @@ def write_transcription(recording_path: Path, transcription: str) -> None:
         json.dump(metadata_dict, metadata_file, indent=2)
         metadata_file.write("\n")
     temporary_path.replace(metadata_path)
+
+    flac_path = recording_path.with_suffix(".flac")
+    if flac_path.exists():
+        _update_flac_metadata(flac_path, metadata_dict, ffmpeg_binary)
+
+
+def _update_flac_metadata(
+    flac_path: Path, metadata: dict[str, Any], ffmpeg_binary: str
+) -> None:
+    """Losslessly remux a FLAC to refresh its Vorbis comments atomically."""
+    temporary_path = flac_path.with_name(f".{flac_path.stem}.tmp.flac")
+    command = [ffmpeg_binary, "-nostdin", "-v", "error", "-y", "-i", str(flac_path), "-map", "0:a:0", "-c:a", "copy"]
+    for key, value in metadata.items():
+        command.extend(("-metadata", f"{key}={value}"))
+    command.extend(("-f", "flac", str(temporary_path)))
+    try:
+        subprocess.run(command, check=True, capture_output=True)
+        os.chmod(temporary_path, 0o600)
+        temporary_path.replace(flac_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)

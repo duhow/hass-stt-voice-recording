@@ -4,8 +4,11 @@ from enum import Enum
 import importlib.util
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
+import wave
 from types import SimpleNamespace
 
 _STORAGE_PATH = (
@@ -17,6 +20,7 @@ _STORAGE_MODULE = importlib.util.module_from_spec(_STORAGE_SPEC)
 _STORAGE_SPEC.loader.exec_module(_STORAGE_MODULE)
 write_recording = _STORAGE_MODULE.write_recording
 write_transcription = _STORAGE_MODULE.write_transcription
+convert_recording_to_flac = _STORAGE_MODULE.convert_recording_to_flac
 
 
 class Value(Enum):
@@ -92,6 +96,47 @@ class RecordingStorageTest(unittest.TestCase):
                     "transcribed": "Turn on the kitchen lights.",
                 },
             )
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "ffmpeg/ffprobe unavailable")
+    def test_converts_wav_to_private_flac_with_metadata_and_later_transcription(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            wav_path = root / "fixture.wav"
+            with wave.open(str(wav_path), "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(16000)
+                wav_file.writeframes(b"\x00\x00" * 1600)
+            metadata = SimpleNamespace(
+                language="ca-ES", format=SimpleNamespace(value="wav"),
+                codec=SimpleNamespace(value="pcm"), bit_rate=16,
+                sample_rate=16000, channel=1,
+            )
+            recording_path = write_recording(root, "voice_recordings", wav_path.read_bytes(), metadata)
+
+            flac_path = convert_recording_to_flac(recording_path, shutil.which("ffmpeg"))
+            self.assertEqual(flac_path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(flac_path.suffix, ".flac")
+            write_transcription(recording_path, "test transcription", shutil.which("ffmpeg"))
+
+            probe = subprocess.run(
+                [shutil.which("ffprobe"), "-v", "error", "-show_streams", "-show_format", "-of", "json", str(flac_path)],
+                check=True, capture_output=True, text=True,
+            )
+            inspected = json.loads(probe.stdout)
+            stream = inspected["streams"][0]
+            tags = {key.lower(): value for key, value in inspected["format"]["tags"].items()}
+            self.assertEqual(stream["codec_name"], "flac")
+            self.assertEqual(stream["sample_rate"], "16000")
+            self.assertEqual(stream["channels"], 1)
+            self.assertEqual(tags["language"], "ca-ES")
+            self.assertEqual(tags["format"], "wav")
+            self.assertEqual(tags["codec"], "pcm")
+            self.assertEqual(tags["bit_rate"], "16")
+            self.assertEqual(tags["sample_rate"], "16000")
+            self.assertEqual(tags["channel"], "1")
+            self.assertEqual(tags["transcribed"], "test transcription")
+            self.assertTrue(recording_path.exists())
 
 
 if __name__ == "__main__":
