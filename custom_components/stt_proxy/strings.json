@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Record and proxy STT audio",
+        "description": "Choose an existing Home Assistant speech-to-text engine. Incoming audio is stored locally before being forwarded to that engine.",
+        "data": {
+          "upstream_engine": "Speech-to-text engine"
+        }
+      }
+    },
+    "error": {
+      "engine_not_found": "That speech-to-text engine is no longer available."
+    },
+    "abort": {
+      "no_stt_engines": "Set up a speech-to-text engine before adding this recorder."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Recording storage",
+        "description": "Choose a directory relative to the Home Assistant configuration directory. Recordings are retained until you remove them.",
+        "data": {
+          "recording_directory": "Recording directory"
+        }
+      }
+    }
+  },
+  "entity": {
+    "stt": {
+      "stt_proxy_recorder": {
+        "name": "STT Proxy Recorder"
+      }
+    }
+  }
+}
