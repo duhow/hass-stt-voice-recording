@@ -3,7 +3,7 @@
   "name": "STT Proxy Recorder",
   "codeowners": [],
   "config_flow": true,
-  "documentation": "https://github.com/home-assistant/core",
+  "documentation": "https://github.com/duhow/hass-stt-voice-recording",
   "iot_class": "local_push",
   "version": "1.0.0"
 }
