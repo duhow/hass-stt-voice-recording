@@ -41,3 +41,20 @@ def write_recording(
     with os.fdopen(metadata_descriptor, "w", encoding="utf-8") as metadata_file:
         json.dump(metadata_dict, metadata_file, indent=2)
     return recording_path
+
+
+def write_transcription(recording_path: Path, transcription: str) -> None:
+    """Append the successful transcription to a recording's JSON metadata."""
+    metadata_path = recording_path.with_suffix(".json")
+    with metadata_path.open(encoding="utf-8") as metadata_file:
+        metadata_dict = json.load(metadata_file)
+    metadata_dict["transcribed"] = transcription
+
+    temporary_path = metadata_path.with_suffix(".json.tmp")
+    descriptor = os.open(
+        temporary_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600
+    )
+    with os.fdopen(descriptor, "w", encoding="utf-8") as metadata_file:
+        json.dump(metadata_dict, metadata_file, indent=2)
+        metadata_file.write("\n")
+    temporary_path.replace(metadata_path)

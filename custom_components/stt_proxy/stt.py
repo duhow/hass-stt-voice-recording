@@ -25,7 +25,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import CONF_RECORDING_DIRECTORY, CONF_UPSTREAM_ENGINE, DEFAULT_RECORDING_DIRECTORY
-from .storage import write_recording
+from .storage import write_recording, write_transcription
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ class STTProxyEntity(SpeechToTextEntity):
         engine = self._upstream()
         replay_stream = _replay_chunks(chunks)
         try:
-            return await engine.async_process_audio_stream(metadata, replay_stream)
+            result = await engine.async_process_audio_stream(metadata, replay_stream)
         except Exception as err:
             _LOGGER.exception(
                 "Upstream STT engine %s failed; recording retained at %s",
@@ -149,6 +149,18 @@ class STTProxyEntity(SpeechToTextEntity):
                 recording_path,
             )
             raise HomeAssistantError("Configured upstream STT engine failed") from err
+
+        try:
+            await asyncio.to_thread(
+                write_transcription, recording_path, result.text
+            )
+        except (OSError, ValueError, TypeError) as err:
+            _LOGGER.error(
+                "Unable to save transcription metadata for recording %s: %s",
+                recording_path,
+                err,
+            )
+        return result
 
 
 async def _replay_chunks(chunks: list[bytes]) -> AsyncIterable[bytes]:

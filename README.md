@@ -13,7 +13,7 @@ The selected engine must remain configured and available. Audio is buffered in m
 By default, recordings are saved under `<HA config>/voice_recordings/`. Change this using the integration's options. The path must be relative to the HA configuration directory and cannot escape it. Each recording consists of:
 
 - `recording_<UTC timestamp>_<random id>.audio`: the exact received bytes (not transcoded or guaranteed to be a standalone WAV file).
-- A sibling `.json` file with the speech format, codec, sample rate, bit rate, channel count, and language.
+- A sibling `.json` file with the speech format, codec, sample rate, bit rate, channel count, and language. After successful transcription, it also contains a `transcribed` field with the recognized text; it is absent if upstream transcription fails.
 
 New files are created with owner-only read/write permissions where supported. Recordings are **not automatically rotated or deleted**; monitor disk use and manually remove files you no longer need.
 
