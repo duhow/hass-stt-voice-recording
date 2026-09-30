@@ -36,17 +36,23 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add the recording proxy entity."""
-    async_add_entities([STTProxyEntity(entry)])
+    async_add_entities([STTProxyEntity(hass, entry)])
 
 
 class STTProxyEntity(SpeechToTextEntity):
     """Capture each request locally, then forward its exact bytes and metadata."""
 
-    _attr_name = "STT Proxy Recorder"
-
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the proxy entity."""
         self._upstream_engine_id = entry.data[CONF_UPSTREAM_ENGINE]
+        state = hass.states.get(self._upstream_engine_id)
+        upstream_name = (
+            state.attributes.get("friendly_name") if state else None
+        )
+        if not upstream_name:
+            engine = stt.async_get_speech_to_text_engine(hass, self._upstream_engine_id)
+            upstream_name = getattr(engine, "name", None) if engine else None
+        self._attr_name = f"Recording {upstream_name or self._upstream_engine_id}"
         self._recording_directory = entry.options.get(
             CONF_RECORDING_DIRECTORY, DEFAULT_RECORDING_DIRECTORY
         )

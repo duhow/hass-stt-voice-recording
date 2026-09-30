@@ -35,11 +35,36 @@ def _available_engines(hass: HomeAssistant) -> list[str]:
     return sorted([*entity_ids, *legacy_providers])
 
 
+def _engine_name(hass: HomeAssistant, engine_id: str) -> str:
+    """Return the display name for an entity or legacy provider, if available."""
+    state = hass.states.get(engine_id)
+    if state and (name := state.attributes.get("friendly_name")):
+        return str(name)
+
+    component = hass.data.get(stt.DATA_COMPONENT)
+    if component:
+        entity = component.get_entity(engine_id)
+        if entity and entity.name:
+            return entity.name
+
+    provider = hass.data.get(stt.DATA_PROVIDERS, {}).get(engine_id)
+    if provider and provider.name:
+        return str(provider.name)
+    return engine_id
+
+
 def _engine_selector(hass: HomeAssistant) -> selector.SelectSelector:
     """Build a selector with currently configured STT engines."""
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
-            options=_available_engines(hass), mode=selector.SelectSelectorMode.DROPDOWN
+            options=[
+                selector.SelectOptionDict(
+                    value=engine_id,
+                    label=f"{_engine_name(hass, engine_id)} ({engine_id})",
+                )
+                for engine_id in _available_engines(hass)
+            ],
+            mode=selector.SelectSelectorMode.DROPDOWN,
         )
     )
 
