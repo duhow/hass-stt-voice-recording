@@ -52,7 +52,27 @@ def convert_recording_to_flac(recording_path: Path, ffmpeg_binary: str) -> Path:
 
     flac_path = recording_path.with_suffix(".flac")
     temporary_path = recording_path.with_name(f".{recording_path.stem}.tmp.flac")
-    command = [ffmpeg_binary, "-nostdin", "-v", "error", "-y", "-i", str(recording_path), "-map", "0:a:0", "-c:a", "flac"]
+    command = [ffmpeg_binary, "-nostdin", "-v", "error", "-y"]
+    # Assist pipeline streams consist of raw PCM chunks even though their STT
+    # metadata describes the equivalent WAV encoding. Do not ask ffmpeg to
+    # probe those headerless bytes as a container.
+    if (
+        metadata_dict.get("format") == "wav"
+        and metadata_dict.get("codec") == "pcm"
+        and not _has_wave_header(recording_path)
+    ):
+        bit_rate = int(metadata_dict["bit_rate"])
+        sample_format = {8: "u8", 16: "s16le", 24: "s24le", 32: "s32le"}.get(bit_rate)
+        if sample_format is None:
+            raise ValueError(f"Unsupported raw PCM bit depth: {bit_rate}")
+        command.extend(
+            (
+                "-f", sample_format,
+                "-ar", str(metadata_dict["sample_rate"]),
+                "-ac", str(metadata_dict["channel"]),
+            )
+        )
+    command.extend(("-i", str(recording_path), "-map", "0:a:0", "-c:a", "flac"))
     for key, value in metadata_dict.items():
         command.extend(("-metadata", f"{key}={value}"))
     command.extend(("-f", "flac", str(temporary_path)))
@@ -63,6 +83,13 @@ def convert_recording_to_flac(recording_path: Path, ffmpeg_binary: str) -> Path:
     finally:
         temporary_path.unlink(missing_ok=True)
     return flac_path
+
+
+def _has_wave_header(recording_path: Path) -> bool:
+    """Return whether the recording starts with a RIFF/WAVE container header."""
+    with recording_path.open("rb") as recording_file:
+        header = recording_file.read(12)
+    return len(header) == 12 and header[:4] in (b"RIFF", b"RIFX", b"RF64") and header[8:] == b"WAVE"
 
 
 def write_transcription(

@@ -138,6 +138,30 @@ class RecordingStorageTest(unittest.TestCase):
             self.assertEqual(tags["transcribed"], "test transcription")
             self.assertTrue(recording_path.exists())
 
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "ffmpeg/ffprobe unavailable")
+    def test_converts_headerless_pcm_using_stt_audio_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            raw_pcm = b"\x00\x00\x01\x00" * 8000
+            metadata = SimpleNamespace(
+                language="ca-ES", format=SimpleNamespace(value="wav"),
+                codec=SimpleNamespace(value="pcm"), bit_rate=16,
+                sample_rate=16000, channel=1,
+            )
+            recording_path = write_recording(root, "voice_recordings", raw_pcm, metadata)
+
+            flac_path = convert_recording_to_flac(recording_path, shutil.which("ffmpeg"))
+            probe = subprocess.run(
+                [shutil.which("ffprobe"), "-v", "error", "-show_streams", "-of", "json", str(flac_path)],
+                check=True, capture_output=True, text=True,
+            )
+
+            stream = json.loads(probe.stdout)["streams"][0]
+            self.assertEqual(recording_path.read_bytes(), raw_pcm)
+            self.assertEqual(stream["codec_name"], "flac")
+            self.assertEqual(stream["sample_rate"], "16000")
+            self.assertEqual(stream["channels"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
