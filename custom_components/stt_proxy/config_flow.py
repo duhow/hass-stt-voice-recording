@@ -26,7 +26,7 @@ def _available_engines(hass: HomeAssistant) -> list[str]:
         [
             entity.entity_id
             for entity in component.entities
-            if not entity.entity_id.startswith(f"{DOMAIN}.")
+            if entity.platform is None or entity.platform.platform_name != DOMAIN
         ]
         if component
         else []
