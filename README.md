@@ -4,19 +4,25 @@ This custom integration adds a Speech-to-Text engine that records incoming Assis
 
 ## Install
 
-Copy `custom_components/stt_proxy` into the `custom_components` directory under your Home Assistant configuration directory, then restart Home Assistant. In **Settings → Devices & services → Add integration**, add **STT Proxy Recorder** and choose an existing STT engine. Select the new `STT Proxy Recorder` engine in an Assist pipeline.
+[![Install repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=duhow&repository=hass-stt-voice-recording&category=integration)
+
+Copy `custom_components/stt_proxy` into the `custom_components` directory under your Home Assistant configuration directory, then restart Home Assistant. 
+
+[![Add Integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start?domain=stt_proxy)
+
+In **Settings → Devices & services → Add integration**, add **STT Proxy Recorder** and choose an existing STT engine. Select the new `STT Proxy Recorder` engine in an Assist pipeline.
 
 The selected engine must remain configured and available. Audio is buffered in memory until the incoming stream ends, saved locally, and then replayed to the upstream engine. Upstream failure does not delete the saved recording.
 
 ## Recordings
 
-By default, recordings are saved under `<HA config>/voice_recordings/`. Change this using the integration's options. The path must be relative to the HA configuration directory and cannot escape it. Each recording consists of:
+By default, recordings are saved under `<HA config>/voice_recordings/`. Change this using the integration's options. The path must be relative to the HA configuration directory and cannot escape it. Filenames use `recording_YYYYMMDD_HHMMSS`; if a recording already exists for that second, the timestamp advances to avoid overwriting it.
 
-- `recording_<UTC timestamp>_<random id>.audio`: the exact received bytes (not transcoded or guaranteed to be a standalone WAV file).
-- A sibling `.json` file with the speech format, codec, sample rate, bit rate, channel count, and language. After successful transcription, it also contains a `transcribed` field with the recognized text; it is absent if upstream transcription fails.
-- A sibling `.flac` file converted asynchronously after the exact `.audio` bytes and JSON sidecar are stored. Its audio stream uses the source audio's decoded sample rate/channels, while Vorbis comments contain every JSON field (`language`, source `format`, `codec`, `bit_rate`, `sample_rate`, `channel`, and `transcribed` after success). The lossless metadata update after transcription remuxes the FLAC without re-encoding audio.
+- Home Assistant's Assist pipeline may provide headerless PCM even when metadata reports `format=wav`; conversion uses the supplied codec, bit depth, sample rate, and channel count when needed.
+- On successful conversion, the `.flac` file is retained with the source metadata stored as FLAC Vorbis comments. The temporary `.audio` input and `.json` sidecar are removed.
+- After successful transcription, the recognized text is added to the FLAC's native `comment` field by losslessly remuxing the FLAC (the audio is not re-encoded). If conversion fails, the original `.audio` and `.json` are retained; successful transcription is added to the JSON as `transcribed`.
 
-New files are created with owner-only read/write permissions where supported. The FLAC copy adds storage overhead alongside the exact input and JSON; recordings are **not automatically rotated or deleted**. Monitor disk use and manually remove files you no longer need. If FFmpeg cannot decode an input, the original `.audio` and `.json` are retained and STT proxying continues.
+New files are created with owner-only read/write permissions where supported. Recordings are **not automatically rotated or deleted**. Monitor disk use and manually remove FLAC files you no longer need. If FFmpeg cannot decode an input, the original `.audio` and `.json` are retained and STT proxying continues.
 
 ## Privacy
 
