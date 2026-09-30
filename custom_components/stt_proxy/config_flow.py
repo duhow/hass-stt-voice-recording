@@ -84,15 +84,11 @@ class STTProxyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> STTProxyOptionsFlow:
         """Return the options flow."""
-        return STTProxyOptionsFlow(config_entry)
+        return STTProxyOptionsFlow()
 
 
-class STTProxyOptionsFlow(config_entries.OptionsFlow):
+class STTProxyOptionsFlow(config_entries.OptionsFlowWithReload):
     """Configure the local recording directory."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Store the config entry."""
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
