@@ -137,8 +137,9 @@ class RecordingStorageTest(unittest.TestCase):
             self.assertEqual(tags["bit_rate"], "16")
             self.assertEqual(tags["sample_rate"], "16000")
             self.assertEqual(tags["channel"], "1")
-            self.assertEqual(tags["transcribed"], "test transcription")
-            self.assertTrue(recording_path.exists())
+            self.assertEqual(tags["comment"], "test transcription")
+            self.assertFalse(recording_path.exists())
+            self.assertFalse(recording_path.with_suffix(".json").exists())
 
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "ffmpeg/ffprobe unavailable")
     def test_converts_headerless_pcm_using_stt_audio_metadata(self) -> None:
@@ -159,10 +160,11 @@ class RecordingStorageTest(unittest.TestCase):
             )
 
             stream = json.loads(probe.stdout)["streams"][0]
-            self.assertEqual(recording_path.read_bytes(), raw_pcm)
             self.assertEqual(stream["codec_name"], "flac")
             self.assertEqual(stream["sample_rate"], "16000")
             self.assertEqual(stream["channels"], 1)
+            self.assertFalse(recording_path.exists())
+            self.assertFalse(recording_path.with_suffix(".json").exists())
 
 
 if __name__ == "__main__":
