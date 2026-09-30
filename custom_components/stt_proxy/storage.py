@@ -5,8 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 from typing import Any
-from uuid import uuid4
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 
 def write_recording(
@@ -22,10 +21,19 @@ def write_recording(
         raise ValueError("Recording directory must remain within HA config")
     output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
-    recording_path = output_dir / f"recording_{stamp}_{uuid4().hex}.audio"
+    stamp = datetime.now(UTC).replace(microsecond=0)
+    while True:
+        recording_path = output_dir / f"recording_{stamp:%Y%m%d_%H%M%S}.audio"
+        try:
+            descriptor = os.open(
+                recording_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+            )
+            break
+        except FileExistsError:
+            # Keep the requested compact filename format without overwriting
+            # recordings created within the same second.
+            stamp += timedelta(seconds=1)
     metadata_path = recording_path.with_suffix(".json")
-    descriptor = os.open(recording_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "wb") as recording_file:
         recording_file.write(audio)
     metadata_dict = {

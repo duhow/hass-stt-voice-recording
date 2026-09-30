@@ -4,6 +4,7 @@ from enum import Enum
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -46,6 +47,7 @@ class RecordingStorageTest(unittest.TestCase):
 
             path = write_recording(root, "voice_recordings", b"\x00audio\xff", metadata)
 
+            self.assertRegex(path.name, re.compile(r"^recording_\d{8}_\d{6}\.audio$"))
             self.assertEqual(path.read_bytes(), b"\x00audio\xff")
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)
